@@ -2,6 +2,9 @@
 #include <stdio.h>
 #include <stdlib.h>
 
+#include <string.h>
+
+#include <mpi.h>
 
 /**
  * \brief Print content of vecrot 'vec'.
@@ -45,30 +48,78 @@ void print_matrix(double *matrix, int SIZE_X, int SIZE_Y)
  */
 void MPI_transform_matrix(double *matrix, int SIZE_X, int SIZE_Y)
 {
+    int commsize, rank;
+    int argc;
+    char **argv;
+    
+    MPI_Init(&argc, &argv);
+    MPI_Comm_size(MPI_COMM_WORLD, &commsize);
+    MPI_Comm_rank(MPI_COMM_WORLD, &rank);
+
    /*
     * coeff_1 needed to create a single diagonal
     * coeff_2 needed to transform to lower-triangular
     */
     double coeff_1, coeff_2;
     
+    double *buf_1, *buf_2, *buf_3;
+    int j, k, l;
+    MPI_Status status;
+    
     for (int i = 0; i < SIZE_X; ++i) {
-	//print_matrix(matrix, SIZE_X, SIZE_Y);
-	coeff_1 = 1.0 / matrix[i * SIZE_Y + i];
-	for (int j = i; j < SIZE_Y; ++j) {
-	    matrix[i * SIZE_Y + j] *= coeff_1;
-	}
-	
-	MPI_Scatter((const void *) matrix + i * SIZE_Y, SIZE_Y, MPI_DOUBLE,
-		    (void*) recv_buf, SIZE_Y, 
-	for (int k = i + 1; k < SIZE_X; ++k) {
-	    coeff_2 = -1.0 * matrix[k * SIZE_Y + i];
-	    for (int l = i; l < SIZE_Y; ++l) {
-		matrix[k * SIZE_Y + l] += matrix[i * SIZE_Y + l] * coeff_2;
+	if (rank == 0) {
+	    coeff_1 = 1.0 / matrix[i * SIZE_Y + i];
+	    for (int j = i; j < SIZE_Y; ++j) {
+		matrix[i * SIZE_Y + j] *= coeff_1;
+	    }
+	    MPI_Bcast((void *) matrix + i * SIZE_Y, SIZE_Y, MPI_DOUBLE,
+		      0, MPI_COMM_WORLD);
+	    k = 0;
+	    l = 0;
+	    for (j = i + 1; j < SIZE_X; ++j) {
+		MPI_Send((const void *) matrix + j * SIZE_Y, SIZE_Y, MPI_DOUBLE,
+			 (k++ % commsize) + 1, 0, MPI_COMM_WORLD);
+		++l;
+	    }
+
+	    for (j = 0; j < commsize; ++j) {
+		MPI_Send((const void *) matrix, SIZE_Y,
+			 MPI_DOUBLE, k, 1, MPI_COMM_WORLD);
+		++l;
+	    }
+	    
+	    buf_3 = (double *) malloc(sizeof(double) * SIZE_Y);
+	    for (j = 0; j < l; ++j) {
+		MPI_Recv((void *) buf_3, SIZE_Y, MPI_DOUBLE, MPI_ANY_SOURCE,
+			 0, MPI_COMM_WORLD, &status);
+		if (status.MPI_TAG != 0) {
+		    memcpy(matrix + status.MPI_TAG * SIZE_Y,
+			   buf_3, SIZE_Y * sizeof(double));
+		}
 	    }
 	}
+		    
+	if (rank != 0) {
+	    buf_1 = (double *) malloc(sizeof(double) * SIZE_Y);
+	    buf_2 = (double *) malloc(sizeof(double) * SIZE_Y);
+	    MPI_Recv((void *) buf_1, SIZE_Y, MPI_DOUBLE, 0, 0,
+		     MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+	    do {
+		MPI_Recv((void *) buf_2, SIZE_Y, MPI_DOUBLE,
+			 0, 0, MPI_COMM_WORLD, &status);
+		for (k = 0; buf_1[k] - 1 < 0.00001; ++k);
+		coeff_2 = -1.0 * buf_2[k];
+		for (j = k; j < SIZE_Y; ++j) {
+		    buf_2[j] += buf_1[j] * coeff_2;
+		}
+		MPI_Send((const void *) buf_2, SIZE_Y, MPI_DOUBLE,
+			 0, status.MPI_TAG, MPI_COMM_WORLD);
+	    } while (status.MPI_TAG != 0);
+	}
     }
-}
 
+//    MPI_Finalize();
+}
 
 /**
  * \brief Finding values of unknown variables.
@@ -135,15 +186,11 @@ int main(int argc, char *argv[])
     fclose(fp);
     print_matrix(matrix, SIZE_X, SIZE_Y);
 
-    int comsize, rank;
-    
-    MPI_Init(&argc, &argv);
-    MPI_Comm_size(MPI_COMM_WORLD, &commsize);
-    MPI_Comm_rank(MPI_COMM_WORLD, &rank);
-    
-    MPI_transform_matrix(matrix, SIZE_X, SIZE_Y);
+//    MPI_Init(&argc, &argv);
+//    MPI_Comm_size(MPI_COMM_WORLD, &commsize);
+//    MPI_Comm_rank(MPI_COMM_WORLD, &rank);
 
-    MPI_Finalize();
+    MPI_transform_matrix(matrix, SIZE_X, SIZE_Y);
 
     print_matrix(matrix, SIZE_X, SIZE_Y);
     
@@ -153,4 +200,6 @@ int main(int argc, char *argv[])
     print_vector(result, SIZE_Y - 1);
     
     free(matrix);
+
+    MPI_Finalize();
 }

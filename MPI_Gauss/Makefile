@@ -1,6 +1,6 @@
 P=main.out
 OBJECTS=main.c
-CC=gcc
+CC=mpicc
 CFLAGS=-Wall -g
 
 all:
