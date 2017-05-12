@@ -51,11 +51,13 @@ void MPI_transform_matrix(double *matrix, int SIZE_X, int SIZE_Y)
     int commsize, rank;
     int argc;
     char **argv;
-    
+
+    printf("123\n");
     MPI_Init(&argc, &argv);
     MPI_Comm_size(MPI_COMM_WORLD, &commsize);
     MPI_Comm_rank(MPI_COMM_WORLD, &rank);
 
+    printf("Hello! I'm %d from %d.\n", rank, commsize);
    /*
     * coeff_1 needed to create a single diagonal
     * coeff_2 needed to transform to lower-triangular
@@ -190,6 +192,7 @@ int main(int argc, char *argv[])
 //    MPI_Comm_size(MPI_COMM_WORLD, &commsize);
 //    MPI_Comm_rank(MPI_COMM_WORLD, &rank);
 
+    printf("4\n");
     MPI_transform_matrix(matrix, SIZE_X, SIZE_Y);
 
     print_matrix(matrix, SIZE_X, SIZE_Y);
