@@ -49,11 +49,7 @@ void print_matrix(double *matrix, int SIZE_X, int SIZE_Y)
 void MPI_transform_matrix(double *matrix, int SIZE_X, int SIZE_Y)
 {
     int commsize, rank;
-    int argc;
-    char **argv;
 
-    printf("123\n");
-    MPI_Init(&argc, &argv);
     MPI_Comm_size(MPI_COMM_WORLD, &commsize);
     MPI_Comm_rank(MPI_COMM_WORLD, &rank);
 
@@ -119,8 +115,6 @@ void MPI_transform_matrix(double *matrix, int SIZE_X, int SIZE_Y)
 	    } while (status.MPI_TAG != 0);
 	}
     }
-
-//    MPI_Finalize();
 }
 
 /**
@@ -167,42 +161,56 @@ double *calculate_matrix(double *matrix, int SIZE_X, int SIZE_Y)
 int main(int argc, char *argv[])
 {
     if (argc < 2) return 1;
+
+    int commsize, rank;
     
-    FILE *fp;
+    MPI_Init(&argc, &argv);
+    MPI_Comm_size(MPI_COMM_WORLD, &commsize);
+    MPI_Comm_rank(MPI_COMM_WORLD, &rank);
 
-    fp = fopen(argv[1], "rb");
-
+    double *matrix = NULL;
     int SIZE_X, SIZE_Y;
     
-    fscanf(fp, "%d", &SIZE_X);
-    fscanf(fp, "%d", &SIZE_Y);
+    if (rank == 0) {
+	FILE *fp;
+	
+	fp = fopen(argv[1], "rb");
+
+	fscanf(fp, "%d", &SIZE_X);
+	fscanf(fp, "%d", &SIZE_Y);
     
-    double *matrix;
-
-    matrix = (double *) malloc(SIZE_X * SIZE_Y * sizeof (double));
-    for (int i = 0; i < SIZE_X; ++i) {
-	for (int j = 0; j < SIZE_Y; ++j) {
-	    fscanf(fp, "%lf", &matrix[i * SIZE_Y + j]);
+	matrix = (double *) malloc(SIZE_X * SIZE_Y * sizeof (double));
+	for (int i = 0; i < SIZE_X; ++i) {
+	    for (int j = 0; j < SIZE_Y; ++j) {
+		fscanf(fp, "%lf", &matrix[i * SIZE_Y + j]);
+	    }
 	}
+	fclose(fp);
+	print_matrix(matrix, SIZE_X, SIZE_Y);
+	MPI_Bcast(matrix, SIZE_X * SIZE_Y, MPI_DOUBLE, 0, MPI_COMM_WORLD);
+	MPI_Bcast(&SIZE_X, 1, MPI_INT, 0, MPI_COMM_WORLD);
+	MPI_Bcast(&SIZE_Y, 1, MPI_INT, 0, MPI_COMM_WORLD);
+    } else {
+	MPI_Recv(matrix, SIZE_X * SIZE_Y, MPI_DOUBLE, 0, 0,
+		 MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+	MPI_Recv(&SIZE_X, 1, MPI_INT, 0, 0,
+		 MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+	MPI_Recv(&SIZE_Y, 1, MPI_INT, 0, 0,
+		 MPI_COMM_WORLD, MPI_STATUS_IGNORE);
     }
-    fclose(fp);
-    print_matrix(matrix, SIZE_X, SIZE_Y);
-
-//    MPI_Init(&argc, &argv);
-//    MPI_Comm_size(MPI_COMM_WORLD, &commsize);
-//    MPI_Comm_rank(MPI_COMM_WORLD, &rank);
-
-    printf("4\n");
+    
     MPI_transform_matrix(matrix, SIZE_X, SIZE_Y);
 
-    print_matrix(matrix, SIZE_X, SIZE_Y);
+    if (rank == 0) {
+	printf("4\n");    
+	print_matrix(matrix, SIZE_X, SIZE_Y);
+	printf("4\n");    
+	double *result;
     
-    double *result;
-    
-    result = calculate_matrix(matrix, SIZE_X, SIZE_Y);
-    print_vector(result, SIZE_Y - 1);
-    
-    free(matrix);
+	result = calculate_matrix(matrix, SIZE_X, SIZE_Y);
+	print_vector(result, SIZE_Y - 1);
+	free(matrix);
+    }
 
     MPI_Finalize();
 }
