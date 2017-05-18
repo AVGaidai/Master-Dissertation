@@ -63,48 +63,64 @@ void MPI_transform_matrix(double *matrix, int SIZE_X, int SIZE_Y)
     double *buf_1, *buf_2, *buf_3;
     int j, k, l;
     MPI_Status status;
+
     
     for (int i = 0; i < SIZE_X; ++i) {
+	buf_1 = (double *) malloc(sizeof(double) * SIZE_Y);
 	if (rank == 0) {
 	    coeff_1 = 1.0 / matrix[i * SIZE_Y + i];
 	    for (int j = i; j < SIZE_Y; ++j) {
 		matrix[i * SIZE_Y + j] *= coeff_1;
 	    }
-	    MPI_Bcast((void *) matrix + i * SIZE_Y, SIZE_Y, MPI_DOUBLE,
-		      0, MPI_COMM_WORLD);
-	    k = 0;
+	    memcpy(buf_1, matrix + i * SIZE_Y, SIZE_Y * sizeof(double));
+
+     	    k = 0;
 	    l = 0;
 	    for (j = i + 1; j < SIZE_X; ++j) {
 		MPI_Send((const void *) matrix + j * SIZE_Y, SIZE_Y, MPI_DOUBLE,
-			 (k++ % commsize) + 1, 0, MPI_COMM_WORLD);
-		++l;
+			 (k++ % commsize) + 1, ++l, MPI_COMM_WORLD);
+		printf("Send string %d to %d:\n", l, (k - 1) % commsize + 1);
+		print_vector(matrix + j * SIZE_Y, SIZE_Y);
 	    }
 
-	    for (j = 0; j < commsize; ++j) {
+	    for (j = 1; j < commsize; ++j) {
 		MPI_Send((const void *) matrix, SIZE_Y,
-			 MPI_DOUBLE, k, 1, MPI_COMM_WORLD);
-		++l;
-	    }
+			 MPI_DOUBLE, j, 0, MPI_COMM_WORLD);
+		printf("Send stub to %d...\n", j);
+      	    }
 	    
 	    buf_3 = (double *) malloc(sizeof(double) * SIZE_Y);
 	    for (j = 0; j < l; ++j) {
+		printf("test message 3\n");
 		MPI_Recv((void *) buf_3, SIZE_Y, MPI_DOUBLE, MPI_ANY_SOURCE,
-			 0, MPI_COMM_WORLD, &status);
+			 MPI_ANY_TAG, MPI_COMM_WORLD, &status);
+		printf("Receive string %d:", status.MPI_TAG);
+		print_vector(buf_3, SIZE_Y);
 		if (status.MPI_TAG != 0) {
-		    memcpy(matrix + status.MPI_TAG * SIZE_Y,
+		    memcpy(matrix + (i + status.MPI_TAG) * SIZE_Y,
 			   buf_3, SIZE_Y * sizeof(double));
 		}
 	    }
+
+	    printf("test message 1\n");
 	}
-		    
+	
+	MPI_Bcast(buf_1, SIZE_Y, MPI_DOUBLE, 0, MPI_COMM_WORLD);
+	if (rank == 0) {
+	    printf("Bcast string:\n");
+	    print_vector(buf_1, SIZE_Y);
+	}
+	
 	if (rank != 0) {
-	    buf_1 = (double *) malloc(sizeof(double) * SIZE_Y);
 	    buf_2 = (double *) malloc(sizeof(double) * SIZE_Y);
-	    MPI_Recv((void *) buf_1, SIZE_Y, MPI_DOUBLE, 0, 0,
+	    printf("test message 2\n");
+	    MPI_Recv((void *) buf_1, SIZE_Y, MPI_DOUBLE, 0, MPI_ANY_TAG,
 		     MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+	    printf("Receive base string for %d:\n", rank);
+	    print_vector(buf_1, SIZE_Y);
 	    do {
 		MPI_Recv((void *) buf_2, SIZE_Y, MPI_DOUBLE,
-			 0, 0, MPI_COMM_WORLD, &status);
+			 0, MPI_ANY_TAG, MPI_COMM_WORLD, &status);
 		for (k = 0; buf_1[k] - 1 < 0.00001; ++k);
 		coeff_2 = -1.0 * buf_2[k];
 		for (j = k; j < SIZE_Y; ++j) {
@@ -115,7 +131,9 @@ void MPI_transform_matrix(double *matrix, int SIZE_X, int SIZE_Y)
 	    } while (status.MPI_TAG != 0);
 	}
     }
+    
 }
+
 
 /**
  * \brief Finding values of unknown variables.
@@ -187,18 +205,11 @@ int main(int argc, char *argv[])
 	}
 	fclose(fp);
 	print_matrix(matrix, SIZE_X, SIZE_Y);
-	MPI_Bcast(matrix, SIZE_X * SIZE_Y, MPI_DOUBLE, 0, MPI_COMM_WORLD);
-	MPI_Bcast(&SIZE_X, 1, MPI_INT, 0, MPI_COMM_WORLD);
-	MPI_Bcast(&SIZE_Y, 1, MPI_INT, 0, MPI_COMM_WORLD);
-    } else {
-	MPI_Recv(matrix, SIZE_X * SIZE_Y, MPI_DOUBLE, 0, 0,
-		 MPI_COMM_WORLD, MPI_STATUS_IGNORE);
-	MPI_Recv(&SIZE_X, 1, MPI_INT, 0, 0,
-		 MPI_COMM_WORLD, MPI_STATUS_IGNORE);
-	MPI_Recv(&SIZE_Y, 1, MPI_INT, 0, 0,
-		 MPI_COMM_WORLD, MPI_STATUS_IGNORE);
     }
-    
+
+    MPI_Bcast(&SIZE_X, 1, MPI_INT, 0, MPI_COMM_WORLD);
+    MPI_Bcast(&SIZE_Y, 1, MPI_INT, 0, MPI_COMM_WORLD);
+   
     MPI_transform_matrix(matrix, SIZE_X, SIZE_Y);
 
     if (rank == 0) {
