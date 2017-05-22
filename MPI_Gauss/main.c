@@ -2,6 +2,8 @@
 #include <stdio.h>
 #include <stdlib.h>
 
+#include <unistd.h>   // sleep
+
 #include <string.h>
 
 #include <mpi.h>
@@ -61,77 +63,122 @@ void MPI_transform_matrix(double *matrix, int SIZE_X, int SIZE_Y)
     double coeff_1, coeff_2;
     
     double *buf_1, *buf_2, *buf_3;
-    int j, k, l;
+    int j, k, l, block_size, remainder, all;
     MPI_Status status;
 
-    
+    buf_1 = (double *) malloc(sizeof(double) * SIZE_Y);
     for (int i = 0; i < SIZE_X; ++i) {
-	buf_1 = (double *) malloc(sizeof(double) * SIZE_Y);
+	block_size = (SIZE_X - i + 1) / commsize;
+	if (block_size == 0) {
+	    block_size = 1;
+	}
+	remainder = (SIZE_X - i + 1) % block_size + block_size;
 	if (rank == 0) {
 	    coeff_1 = 1.0 / matrix[i * SIZE_Y + i];
 	    for (int j = i; j < SIZE_Y; ++j) {
 		matrix[i * SIZE_Y + j] *= coeff_1;
 	    }
+	    if (i == SIZE_X - 1) break;
 	    memcpy(buf_1, matrix + i * SIZE_Y, SIZE_Y * sizeof(double));
 
      	    k = 0;
-	    l = 0;
-	    for (j = i + 1; j < SIZE_X; ++j) {
-		MPI_Send((const void *) matrix + j * SIZE_Y, SIZE_Y, MPI_DOUBLE,
-			 (k++ % commsize) + 1, ++l, MPI_COMM_WORLD);
-		printf("Send string %d to %d:\n", l, (k - 1) % commsize + 1);
-		print_vector(matrix + j * SIZE_Y, SIZE_Y);
+	    all = 0;
+	    buf_3 = (double *) malloc(sizeof(double) * SIZE_Y * block_size);
+	    for (j = 0; j < commsize - 1; ++j) {
+		if (i + 1 + j * block_size >= SIZE_X - remainder) break;
+		memcpy(buf_3, matrix + (i + 1) * SIZE_Y + j * block_size * SIZE_Y, sizeof(double) * SIZE_Y * block_size);
+		MPI_Send(buf_3,//(const void *) matrix + (i + 1) * SIZE_Y + j * block_size * SIZE_Y,
+			 block_size * SIZE_Y, MPI_DOUBLE, j + 1, all++, MPI_COMM_WORLD);
+		printf("to %d:\n", j + 1);
+		print_matrix(matrix + (i + 1) * SIZE_Y + j * block_size * SIZE_Y, block_size, SIZE_Y);
 	    }
-
+	    free(buf_3);
 	    for (j = 1; j < commsize; ++j) {
-		MPI_Send((const void *) matrix, SIZE_Y,
-			 MPI_DOUBLE, j, 0, MPI_COMM_WORLD);
-		printf("Send stub to %d...\n", j);
+		MPI_Send((const void *) matrix, block_size * SIZE_Y,
+			 MPI_DOUBLE, j, commsize + 1, MPI_COMM_WORLD);
+		//printf("Send stub to %d...\n", j);
       	    }
-	    
-	    buf_3 = (double *) malloc(sizeof(double) * SIZE_Y);
-	    for (j = 0; j < l; ++j) {
-		printf("test message 3\n");
-		MPI_Recv((void *) buf_3, SIZE_Y, MPI_DOUBLE, MPI_ANY_SOURCE,
-			 MPI_ANY_TAG, MPI_COMM_WORLD, &status);
-		printf("Receive string %d:", status.MPI_TAG);
-		print_vector(buf_3, SIZE_Y);
-		if (status.MPI_TAG != 0) {
-		    memcpy(matrix + (i + status.MPI_TAG) * SIZE_Y,
-			   buf_3, SIZE_Y * sizeof(double));
-		}
-	    }
-
-	    printf("test message 1\n");
 	}
+	if (i == SIZE_X - 1) break;
 	
 	MPI_Bcast(buf_1, SIZE_Y, MPI_DOUBLE, 0, MPI_COMM_WORLD);
+	MPI_Barrier(MPI_COMM_WORLD);
 	if (rank == 0) {
 	    printf("Bcast string:\n");
 	    print_vector(buf_1, SIZE_Y);
 	}
 	
 	if (rank != 0) {
-	    buf_2 = (double *) malloc(sizeof(double) * SIZE_Y);
-	    printf("test message 2\n");
-	    MPI_Recv((void *) buf_1, SIZE_Y, MPI_DOUBLE, 0, MPI_ANY_TAG,
-		     MPI_COMM_WORLD, MPI_STATUS_IGNORE);
-	    printf("Receive base string for %d:\n", rank);
-	    print_vector(buf_1, SIZE_Y);
+	    for (l = 0; l < rank; ++l) sleep(3);
+	    buf_2 = (double *) malloc(sizeof(double) * block_size * SIZE_Y);
+	    printf("Process %d\n", rank);
 	    do {
-		MPI_Recv((void *) buf_2, SIZE_Y, MPI_DOUBLE,
+		printf("buf_1:\n");
+		print_vector(buf_1, SIZE_Y);
+		MPI_Recv((void *) buf_2, block_size * SIZE_Y, MPI_DOUBLE,
 			 0, MPI_ANY_TAG, MPI_COMM_WORLD, &status);
-		for (k = 0; buf_1[k] - 1 < 0.00001; ++k);
-		coeff_2 = -1.0 * buf_2[k];
-		for (j = k; j < SIZE_Y; ++j) {
-		    buf_2[j] += buf_1[j] * coeff_2;
+		printf("status %d\n", status.MPI_TAG);
+		if (status.MPI_TAG == commsize + 1) break;
+		printf("part start:\n");
+		print_matrix(buf_2, block_size, SIZE_Y);
+		for (k = 0; (buf_1[k] - 1.00 > 0.000001) || (buf_1[k] - 1.00 < -0.000001); ++k);
+		printf("k=%d; dif=%lf\n", k, buf_1[k] - 1.00);
+		for (l = 0; l < block_size; ++l) { 
+		    coeff_2 = -1.0 * buf_2[l * SIZE_Y + k];
+		    for (j = k; j < SIZE_Y; ++j) {
+			buf_2[l * SIZE_Y + j] += buf_1[j] * coeff_2;
+		    }
 		}
-		MPI_Send((const void *) buf_2, SIZE_Y, MPI_DOUBLE,
+		printf("part final:\n");
+		print_matrix(buf_2, block_size, SIZE_Y);
+		MPI_Send((const void *) buf_2, block_size * SIZE_Y, MPI_DOUBLE,
 			 0, status.MPI_TAG, MPI_COMM_WORLD);
-	    } while (status.MPI_TAG != 0);
+	    } while (status.MPI_TAG != commsize + 1);
+	    free(buf_2);
+	} else {
+	    printf("Process %d\n", rank);
+	    printf("buf_1:\n");
+	    print_vector(buf_1, SIZE_Y);	    
+	    buf_2 = (double *) malloc(sizeof(double) * remainder * SIZE_Y);
+	    
+	    memcpy(buf_2, matrix + (SIZE_X - remainder) * SIZE_Y,
+		   remainder * SIZE_Y * sizeof(double));
+	    printf("part start:\n");
+	    print_matrix(buf_2, remainder, SIZE_Y);
+	    for (k = 0; (buf_1[k] - 1.00 > 0.000001) || (buf_1[k] - 1.00 < -0.000001); ++k);
+	    printf("k=%d; dif=%lf\n", k, buf_1[k] - 1.00);
+	    for (l = 0; l < remainder; ++l) { 
+		coeff_2 = -1.0 * buf_2[l * SIZE_Y + k];
+		for (j = k; j < SIZE_Y; ++j) {
+		    buf_2[l * SIZE_Y + j] += buf_1[j] * coeff_2;
+		}
+	    }
+	    memcpy(matrix + (SIZE_X - remainder) * SIZE_Y, buf_2,
+		   remainder * SIZE_Y * sizeof(double));
+	    printf("part final:\n");
+	    print_matrix(buf_2, remainder, SIZE_Y);
+	    free(buf_2);
+
+	    buf_3 = (double *) malloc(sizeof(double) * block_size * SIZE_Y);
+	    printf("all=%d\n", all);
+	    for (j = 0; j < all; ++j) {
+		//printf("test message 3\n");
+		MPI_Recv((void *) buf_3, block_size * SIZE_Y, MPI_DOUBLE, MPI_ANY_SOURCE,
+			 MPI_ANY_TAG, MPI_COMM_WORLD, &status);
+		memcpy(matrix + (i + 1) * SIZE_Y + status.MPI_TAG * block_size * SIZE_Y,
+		       buf_3, block_size * SIZE_Y * sizeof(double));
+	    }
+	    free(buf_3);
+
+	    //printf("test message 1\n");
+	}
+	MPI_Barrier(MPI_COMM_WORLD);
+	if (rank == 0) {
+	    printf("=========================\n");
+	    print_matrix(matrix, SIZE_X, SIZE_Y);
 	}
     }
-    
+    free(buf_1);
 }
 
 
