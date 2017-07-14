@@ -68,11 +68,12 @@ void MPI_transform_matrix(double *matrix, int SIZE_X, int SIZE_Y)
 
     buf_1 = (double *) malloc(sizeof(double) * SIZE_Y);
     for (int i = 0; i < SIZE_X; ++i) {
-	block_size = (SIZE_X - i + 1) / commsize;
+	block_size = (SIZE_X - (i + 1)) / commsize;
 	if (block_size == 0) {
-	    block_size = 1;
+	    remainder = SIZE_X - (i + 1);
+	} else {
+	    remainder = (SIZE_X - (i + 1)) % commsize + block_size;
 	}
-	remainder = (SIZE_X - i + 1) % block_size + block_size;
 	if (rank == 0) {
 	    coeff_1 = 1.0 / matrix[i * SIZE_Y + i];
 	    for (int j = i; j < SIZE_Y; ++j) {
@@ -108,7 +109,6 @@ void MPI_transform_matrix(double *matrix, int SIZE_X, int SIZE_Y)
 	}
 	
 	if (rank != 0) {
-	    for (l = 0; l < rank; ++l) sleep(3);
 	    buf_2 = (double *) malloc(sizeof(double) * block_size * SIZE_Y);
 	    printf("Process %d\n", rank);
 	    do {
@@ -163,6 +163,7 @@ void MPI_transform_matrix(double *matrix, int SIZE_X, int SIZE_Y)
 	    for (j = 0; j < all; ++j) {
 		MPI_Recv((void *) buf_3, block_size * SIZE_Y, MPI_DOUBLE, MPI_ANY_SOURCE,
 			 MPI_ANY_TAG, MPI_COMM_WORLD, &status);
+		if (status.MPI_TAG == commsize + 1) status.MPI_TAG = 0;
 		memcpy(matrix + (i + 1) * SIZE_Y + status.MPI_TAG * block_size * SIZE_Y,
 		       buf_3, block_size * SIZE_Y * sizeof(double));
 	    }
