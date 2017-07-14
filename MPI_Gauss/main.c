@@ -86,9 +86,9 @@ void MPI_transform_matrix(double *matrix, int SIZE_X, int SIZE_Y)
 	    buf_3 = (double *) malloc(sizeof(double) * SIZE_Y * block_size);
 	    for (j = 0; j < commsize - 1; ++j) {
 		if (i + 1 + j * block_size >= SIZE_X - remainder) break;
-		memcpy(buf_3, matrix + (i + 1) * SIZE_Y + j * block_size * SIZE_Y, sizeof(double) * SIZE_Y * block_size);
-		MPI_Send(buf_3,//(const void *) matrix + (i + 1) * SIZE_Y + j * block_size * SIZE_Y,
-			 block_size * SIZE_Y, MPI_DOUBLE, j + 1, all++, MPI_COMM_WORLD);
+		memcpy(buf_3, matrix + (i + 1) * SIZE_Y + j * block_size * SIZE_Y,
+		                              sizeof(double) * SIZE_Y * block_size);
+		MPI_Send(buf_3, block_size * SIZE_Y, MPI_DOUBLE, j + 1, all++, MPI_COMM_WORLD);
 		printf("to %d:\n", j + 1);
 		print_matrix(matrix + (i + 1) * SIZE_Y + j * block_size * SIZE_Y, block_size, SIZE_Y);
 	    }
@@ -96,8 +96,7 @@ void MPI_transform_matrix(double *matrix, int SIZE_X, int SIZE_Y)
 	    for (j = 1; j < commsize; ++j) {
 		MPI_Send((const void *) matrix, block_size * SIZE_Y,
 			 MPI_DOUBLE, j, commsize + 1, MPI_COMM_WORLD);
-		//printf("Send stub to %d...\n", j);
-      	    }
+	    }
 	}
 	if (i == SIZE_X - 1) break;
 	
@@ -162,15 +161,12 @@ void MPI_transform_matrix(double *matrix, int SIZE_X, int SIZE_Y)
 	    buf_3 = (double *) malloc(sizeof(double) * block_size * SIZE_Y);
 	    printf("all=%d\n", all);
 	    for (j = 0; j < all; ++j) {
-		//printf("test message 3\n");
 		MPI_Recv((void *) buf_3, block_size * SIZE_Y, MPI_DOUBLE, MPI_ANY_SOURCE,
 			 MPI_ANY_TAG, MPI_COMM_WORLD, &status);
 		memcpy(matrix + (i + 1) * SIZE_Y + status.MPI_TAG * block_size * SIZE_Y,
 		       buf_3, block_size * SIZE_Y * sizeof(double));
 	    }
 	    free(buf_3);
-
-	    //printf("test message 1\n");
 	}
 	MPI_Barrier(MPI_COMM_WORLD);
 	if (rank == 0) {
