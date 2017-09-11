@@ -87,11 +87,13 @@ void MPI_transform_matrix(double *matrix, int SIZE_X, int SIZE_Y)
 	    buf_3 = (double *) malloc(sizeof(double) * SIZE_Y * block_size);
 	    for (j = 0; j < commsize - 1; ++j) {
 		if (i + 1 + j * block_size >= SIZE_X - remainder) break;
-		memcpy(buf_3, matrix + (i + 1) * SIZE_Y + j * block_size * SIZE_Y,
-		                              sizeof(double) * SIZE_Y * block_size);
-		MPI_Send(buf_3, block_size * SIZE_Y, MPI_DOUBLE, j + 1, all++, MPI_COMM_WORLD);
+		memcpy(buf_3, matrix + (i + 1) * SIZE_Y + j * block_size *
+                       SIZE_Y, sizeof(double) * SIZE_Y * block_size);
+		MPI_Send(buf_3, block_size * SIZE_Y,
+                         MPI_DOUBLE, j + 1, all++, MPI_COMM_WORLD);
 		printf("to %d:\n", j + 1);
-		print_matrix(matrix + (i + 1) * SIZE_Y + j * block_size * SIZE_Y, block_size, SIZE_Y);
+		print_matrix(matrix + (i + 1) * SIZE_Y + j * block_size * SIZE_Y,
+                             block_size, SIZE_Y);
 	    }
 	    free(buf_3);
 	    for (j = 1; j < commsize; ++j) {
@@ -120,7 +122,8 @@ void MPI_transform_matrix(double *matrix, int SIZE_X, int SIZE_Y)
 		if (status.MPI_TAG == commsize + 1) break;
 		printf("part start:\n");
 		print_matrix(buf_2, block_size, SIZE_Y);
-		for (k = 0; (buf_1[k] - 1.00 > 0.000001) || (buf_1[k] - 1.00 < -0.000001); ++k);
+		for (k = 0; (buf_1[k] - 1.00 > 0.000001) ||
+                         (buf_1[k] - 1.00 < -0.000001); ++k);
 		printf("k=%d; dif=%lf\n", k, buf_1[k] - 1.00);
 		for (l = 0; l < block_size; ++l) { 
 		    coeff_2 = -1.0 * buf_2[l * SIZE_Y + k];
@@ -144,7 +147,8 @@ void MPI_transform_matrix(double *matrix, int SIZE_X, int SIZE_Y)
 		   remainder * SIZE_Y * sizeof(double));
 	    printf("part start:\n");
 	    print_matrix(buf_2, remainder, SIZE_Y);
-	    for (k = 0; (buf_1[k] - 1.00 > 0.000001) || (buf_1[k] - 1.00 < -0.000001); ++k);
+	    for (k = 0; (buf_1[k] - 1.00 > 0.000001) ||
+                     (buf_1[k] - 1.00 < -0.000001); ++k);
 	    printf("k=%d; dif=%lf\n", k, buf_1[k] - 1.00);
 	    for (l = 0; l < remainder; ++l) { 
 		coeff_2 = -1.0 * buf_2[l * SIZE_Y + k];
@@ -161,11 +165,11 @@ void MPI_transform_matrix(double *matrix, int SIZE_X, int SIZE_Y)
 	    buf_3 = (double *) malloc(sizeof(double) * block_size * SIZE_Y);
 	    printf("all=%d\n", all);
 	    for (j = 0; j < all; ++j) {
-		MPI_Recv((void *) buf_3, block_size * SIZE_Y, MPI_DOUBLE, MPI_ANY_SOURCE,
-			 MPI_ANY_TAG, MPI_COMM_WORLD, &status);
+		MPI_Recv((void *) buf_3, block_size * SIZE_Y, MPI_DOUBLE,
+                         MPI_ANY_SOURCE, MPI_ANY_TAG, MPI_COMM_WORLD, &status);
 		if (status.MPI_TAG == commsize + 1) status.MPI_TAG = 0;
-		memcpy(matrix + (i + 1) * SIZE_Y + status.MPI_TAG * block_size * SIZE_Y,
-		       buf_3, block_size * SIZE_Y * sizeof(double));
+		memcpy(matrix + (i + 1) * SIZE_Y + status.MPI_TAG * block_size *
+                       SIZE_Y, buf_3, block_size * SIZE_Y * sizeof(double));
 	    }
 	    free(buf_3);
 	}
