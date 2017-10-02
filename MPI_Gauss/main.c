@@ -43,14 +43,18 @@ void print_matrix(double *matrix, int SIZE_X, int SIZE_Y)
 /**
  * \brief Partition of the input matrix into parts.
  *
- * \param file descriptor of the input matrix.
- * \param pointer to the output part.
- * \param pointer to the number of rows in the output part.
- * \param pointer to the number of columns in the output part.
+ * \param fp is file descriptor of the input matrix.
+ * \param part is pointer to the output part.
+ * \param ROWS is pointer to the number of rows in the output part.
+ * \param COLUMNS is pointer to the number of columns in the output part.
+ * \param ALLROWS is pointer to the number of rows in the input matrix.
  */
-void MPI_Matrix_Partition(FILE *fp, double **part, int *ROWS, int *COLUMNS)
+void MPI_Matrix_Partition(FILE *fp, double **part,
+                          int *ROWS, int *COLUMNS, int *ALLROWS)
 {
    /*
+    * i is index of the row in the input matrix
+    * j is index of the columns in the row
     * cnt is counter of rows in the output part
     * row is currently processed row
     */
@@ -62,17 +66,16 @@ void MPI_Matrix_Partition(FILE *fp, double **part, int *ROWS, int *COLUMNS)
     MPI_Comm_size(MPI_COMM_WORLD, &commsize);
     MPI_Comm_rank(MPI_COMM_WORLD, &rank);
 
-    printf("Hello World, I'am %d process!\n", rank);
     *part = NULL;
     cnt = 0;
     /* Main process */
     if (rank == 0) {
         /* Reading matrix size */
-        fscanf(fp, "%d %d", ROWS, COLUMNS);
+        fscanf(fp, "%d %d", ALLROWS, COLUMNS);
         /* Allocate memory for row */
         row = (double *) malloc(*COLUMNS * sizeof(double));
         /* Alternate reading matrix rows */
-        for (i = 0; i < *ROWS; ++i) {
+        for (i = 0; i < *ALLROWS; ++i) {
             for (j = 0; j < *COLUMNS; ++j) {
                 fscanf(fp, "%lf", &row[j]);
             }
@@ -109,9 +112,11 @@ void MPI_Matrix_Partition(FILE *fp, double **part, int *ROWS, int *COLUMNS)
         }
     }
 
-    /* Broadcast message with nomber of columns */
+    /* Broadcast message with number of columns */
     MPI_Bcast((void *) COLUMNS, 1, MPI_INT, 0, MPI_COMM_WORLD);
-
+    /* Broadcast message with number of rows in the input matrix */    
+    MPI_Bcast((void *) ALLROWS, 1, MPI_INT, 0, MPI_COMM_WORLD);
+    
     /* For other process */
     if (rank != 0) {
         /* Allocate memory for row */
@@ -146,18 +151,61 @@ void MPI_Matrix_Partition(FILE *fp, double **part, int *ROWS, int *COLUMNS)
 /**
  * \brief Matrix transformation to lower-triangular.
  *
- * \param matrix is pointer on matrix.
- * \param SIZE_X is number of rows in the matrix.
- * \param SIZE_Y is number of columns in the matrix.
+ * \param part is pointer on matrix part.
+ * \param ROWS is number of rows in the matrix part.
+ * \param COLUMNS is number of columns in the matrix part.
+ * \param ALLROWS is number of rows in the input matrix.
  */
-void MPI_Gauss_Forward(double *matrix, int SIZE_X, int SIZE_Y)
+void MPI_Gauss_Forward(double *part, int ROWS, int COLUMNS, int ALLROWS)
 {
-    int commsize, rank, current_row = 0;
-
+   /*
+    * i is current row number in the general matrix
+    * j is active node number
+    * k is current row number in the matrix part (for send)
+    * l is current column number in the current row
+    * m is current row number in the matrix part (for modification)
+    */
+    int commsize, rank, offset;
+    int i, j, k, l, m;
+    double *row;
+        
     MPI_Comm_size(MPI_COMM_WORLD, &commsize);    
     MPI_Comm_rank(MPI_COMM_WORLD, &rank);
 
-    printf("Hello! I'm %d from %d.\n", rank, commsize);
+    /* Allocate memory for row */
+    row = (double *) malloc(COLUMNS * sizeof(double));
+    k = 0;
+    /* Cyclic processing of the general matrix */
+    for (i = 0; i < ALLROWS; ) {
+        for (j = 0; j < commsize && i < ALLROWS; ++j) {
+            /* If node is active */
+            if (rank == j) {
+                offset = k * COLUMNS;
+                /* Modification of the current row */
+                for (l = i + 1; l < COLUMNS; ++l) {
+                    part[offset + l] /= part[offset + i];
+                }
+                part[offset + i] = 1;
+                /* Copying modificated row to the buffer */
+                memcpy(row, part + offset, COLUMNS * sizeof(double));
+                ++k;
+            }
+            /* Broad cast message with current row */
+            MPI_Bcast((void *) row, COLUMNS, MPI_DOUBLE, j, MPI_COMM_WORLD);
+
+            /* Processing of the part matrix remainder */
+            for (m = k; m < ROWS; ++m) {
+                offset = m * COLUMNS;
+                for (l = i + 1; l < COLUMNS; ++l) {
+                    part[offset + l] -= part[offset + i] * row[l];
+                }
+                part[offset + i] = 0;
+            }
+            ++i;
+        }
+    }
+
+    free(row);
 }
 
 
@@ -187,7 +235,7 @@ double *calculate_matrix(double *matrix, int SIZE_X, int SIZE_Y)
  */
 int main(int argc, char *argv[])
 {
-    int commsize, rank, ROWS, COLUMNS;
+    int commsize, rank, ROWS, COLUMNS, ALLROWS;
     double *matrix = NULL; 
     FILE *fp;
     
@@ -200,7 +248,7 @@ int main(int argc, char *argv[])
     if (rank == 0)
         fp = fopen(argv[1], "r");
     
-    MPI_Matrix_Partition(fp, &matrix, &ROWS, &COLUMNS);
+    MPI_Matrix_Partition(fp, &matrix, &ROWS, &COLUMNS, &ALLROWS);
 
     if (rank == 0)
         fclose(fp);
@@ -208,6 +256,12 @@ int main(int argc, char *argv[])
     sleep(rank);
     print_matrix(matrix, ROWS, COLUMNS);
 
+    sleep(5);
+    
+    MPI_Gauss_Forward(matrix, ROWS, COLUMNS, ALLROWS);
+    sleep(rank);
+    print_matrix(matrix, ROWS, COLUMNS);
+    
     if (ROWS) free(matrix);
 
     MPI_Finalize();
