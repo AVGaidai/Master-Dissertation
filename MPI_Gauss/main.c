@@ -225,12 +225,13 @@ double *MPI_Gauss_Backward(double *part, int ROWS, int COLUMNS, int ALLROWS)
     * i is current row number in the general matrix
     * j is active node number
     * k is current row number in the matrix part (for final value)
+    * l is current columns in the row of calculation
     * m is current row number in the matrix part (for modification)
     * X is vector of found values
     * tmp is temporary variable
     */
     int commsize, rank, offset;
-    int i, j, k, m;
+    int i, j, k, l, m;
     double *X;
     double tmp;
         
@@ -302,19 +303,20 @@ int main(int argc, char *argv[])
     if (rank == 0)
         fclose(fp);
     
-    sleep(rank);
-    print_matrix(matrix, ROWS, COLUMNS);
+    /* sleep(rank); */
+    /* print_matrix(matrix, ROWS, COLUMNS); */
 
-    sleep(5);
+    /* sleep(5); */
     
     MPI_Gauss_Forward(matrix, ROWS, COLUMNS, ALLROWS);
-    sleep(rank);
-    print_matrix(matrix, ROWS, COLUMNS);
+
+    /* sleep(rank); */
+    /* print_matrix(matrix, ROWS, COLUMNS); */
 
     X = (double *) malloc(ROWS * sizeof(double));
     X = MPI_Gauss_Backward(matrix, ROWS, COLUMNS, ALLROWS);
 
-    sleep(rank);
+    /* sleep(rank); */
 
     for (i = 0; i < ROWS; ++i) {
         printf("X%d = %lf\n", rank, X[i]);
