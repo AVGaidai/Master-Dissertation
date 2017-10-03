@@ -7,4 +7,4 @@ all:
 	$(CC) $(CFLAGS) -o $(P) $(OBJECTS)
 
 clean:
-	rm -rf *.out
+	rm -rf *.out *.txt
