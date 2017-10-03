@@ -175,7 +175,7 @@ void MPI_Gauss_Forward(double *part, int ROWS, int COLUMNS, int ALLROWS)
     /* Allocate memory for row */
     row = (double *) malloc(COLUMNS * sizeof(double));
     k = 0;
-    /* Cyclic processing of the general matrix */
+    /* Cyclic processing (forward) of the general matrix */
     for (i = 0; i < ALLROWS; ) {
         for (j = 0; j < commsize && i < ALLROWS; ++j) {
             /* If node is active */
@@ -193,7 +193,7 @@ void MPI_Gauss_Forward(double *part, int ROWS, int COLUMNS, int ALLROWS)
             /* Broad cast message with current row */
             MPI_Bcast((void *) row, COLUMNS, MPI_DOUBLE, j, MPI_COMM_WORLD);
 
-            /* Processing of the part matrix remainder */
+            /* Processing (forward) of the part matrix remainder */
             for (m = k; m < ROWS; ++m) {
                 offset = m * COLUMNS;
                 for (l = i + 1; l < COLUMNS; ++l) {
@@ -212,42 +212,54 @@ void MPI_Gauss_Forward(double *part, int ROWS, int COLUMNS, int ALLROWS)
 /**
  * \brief Finding values of unknown variables.
  *
+ * \param part is pointer on matrix part.
+ * \param ROWS is number of rows in the matrix part.
+ * \param COLUMNS is number of columns in the matrix part.
+ * \param ALLROWS is number of rows in the input matrix.
+ * 
+ * \return vector of found values.
  */
-double MPI_Gauss_Backward(double *part, int ROWS, int COLUMNS, int ALLROWS)
+double *MPI_Gauss_Backward(double *part, int ROWS, int COLUMNS, int ALLROWS)
 {
    /*
     * i is current row number in the general matrix
     * j is active node number
-    * k is current row number in the matrix part (for send)
-    * l is current column number in the current row
+    * k is current row number in the matrix part (for final value)
     * m is current row number in the matrix part (for modification)
+    * X is vector of found values
+    * tmp is temporary variable
     */
     int commsize, rank, offset;
-    int i, j, k, l, m;
-    double X, tmp;
+    int i, j, k, m;
+    double *X;
+    double tmp;
         
     MPI_Comm_size(MPI_COMM_WORLD, &commsize);    
     MPI_Comm_rank(MPI_COMM_WORLD, &rank);
 
+    /* If node was activated */
+    if (ROWS)
+        /* Allocate memory for vector of found values */
+        X = (double *) malloc(ROWS * sizeof(double));
     k = ROWS - 1;
-    /* Cyclic processing of the general matrix */
+    /* Cyclic processing (backward) of the general matrix */
     for (i = ALLROWS - 1; i >= 0; ) {
-        for (j = commsize - 1; j >= 0 && i >= 0; --j) {
+        for (j = i % commsize; j >= 0 && i >= 0; --j) {
             /* If node is active */
             if (rank == j) {
                 offset = k * COLUMNS;
-                X = part[offset + COLUMNS - 1];
-                /* Modification of the current row */
+                /* Calculate value */
+                X[k] = part[offset + COLUMNS - 1];
                 for (l = COLUMNS - 2; l > i; --l) {
-                    X -= part[offset + l];
+                    X[k] -= part[offset + l];
                 }
-                tmp = X;
+                tmp = X[k];
                 --k;
             }
-            /* Broad cast message with current row */
+            /* Broad cast message with found value */
             MPI_Bcast((void *) &tmp, 1, MPI_DOUBLE, j, MPI_COMM_WORLD);
 
-            /* Processing of the part matrix remainder */
+            /* Calculating processing (backward) of the part matrix remainder */
             for (m = k; m >= 0; --m) {
                 offset = m * COLUMNS;
                 part[offset + i] *= tmp;
@@ -255,6 +267,7 @@ double MPI_Gauss_Backward(double *part, int ROWS, int COLUMNS, int ALLROWS)
             --i;
         }
     }
+    
     return X;
 }
 
@@ -271,9 +284,8 @@ double MPI_Gauss_Backward(double *part, int ROWS, int COLUMNS, int ALLROWS)
  */
 int main(int argc, char *argv[])
 {
-    int commsize, rank, ROWS, COLUMNS, ALLROWS;
-    double X;
-    double *matrix = NULL; 
+    int commsize, rank, ROWS, COLUMNS, ALLROWS, i;
+    double *X, *matrix = NULL; 
     FILE *fp;
     
     if (argc < 2) return 1;
@@ -299,12 +311,20 @@ int main(int argc, char *argv[])
     sleep(rank);
     print_matrix(matrix, ROWS, COLUMNS);
 
+    X = (double *) malloc(ROWS * sizeof(double));
     X = MPI_Gauss_Backward(matrix, ROWS, COLUMNS, ALLROWS);
 
     sleep(rank);
-    printf("X%d = %lf\n", rank, X);
-    
-    if (ROWS) free(matrix);
 
+    for (i = 0; i < ROWS; ++i) {
+        printf("X%d = %lf\n", rank, X[i]);
+        rank += commsize;
+    }
+    
+    if (ROWS) {
+        free(X);
+        free(matrix);
+    }
+    
     MPI_Finalize();
 }
