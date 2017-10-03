@@ -86,7 +86,7 @@ void MPI_Matrix_Partition(FILE *fp, double **part,
                 /* Reallocate memory and add new row in the output part */
                 *part = (double *) realloc(*part, (cnt + 1) *
                                            (*COLUMNS) * sizeof(double));
-                memcpy((void *) *part + cnt * (*COLUMNS),
+                memcpy((void *) (*part + cnt * (*COLUMNS)),
                        (void *) row,
                        sizeof(double) * (*COLUMNS));  
                 ++cnt; // Increase counter of the rows
@@ -137,7 +137,7 @@ void MPI_Matrix_Partition(FILE *fp, double **part,
             /* Reallocate memory and add new row in the output part */
             *part = (double *) realloc(*part, (cnt + 1) *
                                        (*COLUMNS) * sizeof(double));
-            memcpy((void *) *part + cnt * (*COLUMNS),
+            memcpy((void *) (*part + cnt * (*COLUMNS)),
                    (void *) row,
                    sizeof(double) * (*COLUMNS));  
             ++cnt; // Increase counter of the rows
@@ -302,9 +302,9 @@ int main(int argc, char *argv[])
 
     if (rank == 0)
         fclose(fp);
-    
+
     /* sleep(rank); */
-    /* print_matrix(matrix, ROWS, COLUMNS); */
+    /* if (rank == 0) print_matrix(matrix, ROWS, COLUMNS); */
 
     /* sleep(5); */
     
