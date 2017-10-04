@@ -1,78 +1,35 @@
 /** \file */
+/*
+ * GAUSS ELIMINATION (SERIAL VERSION) BY ANATOLY GAIDAI
+ * 2017
+ */
 #include <stdio.h>
 #include <stdlib.h>
 
-/*
-typedef struct {
 
-    int dividend;
-    int divisor;
-
-    double division;
+/**
+ * \brief Print content of matrix 'matrix'.
+ * 
+ * \param matrix is pointer on matrix.
+ * \param ROWS is number of rows in the matrix.
+ * \param COLUMNS is number of columns in the matrix.
+ *
+ * \return no return value.
+ */
+void print_matrix(double *matrix, int ROWS, int COLUMNS)
+{
+   /*
+    * i is current row in the matrix
+    * j is current columns in the matrix
+    * offset is shift in the current row of matrix
+    */
+    int i, j, offset;
     
-} Quotient;
-
-
-Quotient quot_init(int dividend, int divisor)
-{
-    return (Quotient) {
-	.dividend = dividend,
-	.divisor = divisor,
-	.division = dividend / (double) divisor
-	}
-}
-
-
-Quotient quot_add(Quotient A, Quotient B)
-{
-    return (Quotient) {
-	.dividend = A.dividend + B.dividend,
-	.divisor = A.divisor + B.divisor,
-	.division = .dividend / (double) .divisor
-	}
-}
-
-
-Quotient quot_mul(Quotient A, Quotient B)
-{
-    return (Quotient) {
-	.dividend = A.dividend * B.dividend,
-	.divisor = A.divisor * B.divisor,
-	.divisiob = .dividend / (double) divisor
-	}
-}
-*/
-
-
-/**
- * Print content of vecrot 'vec'.
- * \param *vec -- pointer on vecor;
- * \param size -- size of vector.
- *
- * \return -- no return value.
- */
-void print_vector(double *vec, int size)
-{
-    printf("Vector:\n");
-    for (int i = 0; i < size; ++i)
-	printf("x%d=%.4lf\n", i, vec[i]);
-}
-
-
-/**
- * Print content of matrix 'matrix'.
- * \param *matrix -- pointer on matrix;
- * \param SIZE_X -- number of rows in the matrix;
- * \param SIZE_Y -- number of columns in the matrix.
- *
- * \return -- no return value.
- */
-void print_matrix(double *matrix, int SIZE_X, int SIZE_Y)
-{
     printf("Matrix:\n");
-    for (int i = 0; i < SIZE_X; ++i) {
-	for (int j = 0; j < SIZE_Y; ++j) {
-	    printf("%.2lf\t", matrix[i * SIZE_Y + j]);
+    for (i = 0; i < ROWS; ++i) {
+        offset = i * COLUMNS;
+	for (j = 0; j < COLUMNS; ++j) {
+	    printf("%.2lf\t", matrix[offset + j]);
 	}
 	printf("\n");
     }
@@ -80,31 +37,45 @@ void print_matrix(double *matrix, int SIZE_X, int SIZE_Y)
 
 
 /**
- * Matrix transformation to lower-triangular.
- * \param *matrix -- pointer on matrix;
- * \param SIZE_X -- number of rows in the matrix;
- * \param SIZE_Y -- number of columns in the matrix.
+ * \brief Matrix transformation to lower-triangular.
  *
- * \return -- no return value.
+ * \param matrix is pointer on matrix.
+ * \param ROWS is number of rows in the matrix.
+ * \param COLUMNS is number of columns in the matrix.
+ *
+ * \return no return value.
  */
-void transform_matrix(double *matrix, int SIZE_X, int SIZE_Y)
-{
+void Gauss_Forward(double *matrix, int ROWS, int COLUMNS)
+{    
    /*
+    * i is current row in the matrix
+    * j is current column in the matrix
+    * k is current row in the calculating part of matrix
+    * l is current column in the calculating part of matrix
+    * offset is shift in the current row of matrix
     * coeff_1 needed to create a single diagonal
     * coeff_2 needed to transform to lower-triangular
     */
+    int i, j, k, l, offset;
     double coeff_1, coeff_2;
-    
-    for (int i = 0; i < SIZE_X; ++i) {
-	//print_matrix(matrix, SIZE_X, SIZE_Y);
-	coeff_1 = 1.0 / matrix[i * SIZE_Y + i];
-	for (int j = i; j < SIZE_Y; ++j) {
-	    matrix[i * SIZE_Y + j] *= coeff_1;
+
+    /* Alternate processing (forward) of the matrix */
+    for (i = 0; i < ROWS; ++i) {
+        offset = i * COLUMNS;
+        /* Finding coefficient for current row */
+	coeff_1 = 1.0 / matrix[offset + i];
+        /* Transforming current row */
+	for (j = i; j < COLUMNS; ++j) {
+	    matrix[offset + j] *= coeff_1;
 	}
-	for (int k = i + 1; k < SIZE_X; ++k) {
-	    coeff_2 = -1.0 * matrix[k * SIZE_Y + i];
-	    for (int l = i; l < SIZE_Y; ++l) {
-		matrix[k * SIZE_Y + l] += matrix[i * SIZE_Y + l] * coeff_2;
+        /* Transforming other rows */
+	for (k = i + 1; k < ROWS; ++k) {
+            offset = k * COLUMNS;
+            /* Finding coefficient for each row */
+	    coeff_2 = -1.0 * matrix[offset + i];
+            /* Transforming row */
+	    for (l = i; l < COLUMNS; ++l) {
+		matrix[offset + l] += matrix[i * COLUMNS + l] * coeff_2;
 	    }
 	}
     }
@@ -112,73 +83,131 @@ void transform_matrix(double *matrix, int SIZE_X, int SIZE_Y)
 
 
 /**
- * Finding values of unknown variables.
- * \param *matrix -- pointer on matrix;
- * \param SIZE_X -- number of rows in the matrix;
- * \param SIZE_Y -- number of columns in the matrix.
+ * \brief Finding values of unknown variables.
  *
- * \return -- vector values.
+ * \param matrix is pointer on matrix.
+ * \param ROWS is number of rows in the matrix.
+ * \param COLUMNS is number of columns in the matrix.
+ *
+ * \return vector values.
  */
-double *calculate_matrix(double *matrix, int SIZE_X, int SIZE_Y)
+double *Gauss_Backward(double *matrix, int ROWS, int COLUMNS)
 {
+   /*
+    * i is current row in the matrix
+    * j is current column in the matrix
+    * offset is shift in the current row of matrix
+    * result is vector of found values
+    */    
+    int i, j, offset;
     double *result;
 
-    result = (double *) malloc((SIZE_Y - 1) * sizeof (double));
+    /* Allocate memory for result vector */
+    result = (double *) malloc(ROWS * sizeof (double));
 
    /*
     * Vector is formed from right to left 
     */
-    for (int i = SIZE_X - 1; i >= 0; --i) {
-	result[SIZE_Y - (SIZE_X - i) - 1] = matrix[(i + 1) * SIZE_Y - 1];
-	int j = 1;
-	
-	for (j = 1; j < SIZE_X - i; ++j) {
-	    result[SIZE_Y - (SIZE_X - i) - 1] -= result[SIZE_Y - j - 1] *
-		                               matrix[(i + 1) * SIZE_Y - 1 - j];
+    for (i = ROWS - 1; i >= 0; --i) {
+        offset = (i + 1) * COLUMNS;
+	result[COLUMNS - (ROWS - i) - 1] = matrix[offset - 1];
+        for (j = 1; j < ROWS - i; ++j) {
+	    result[COLUMNS - (ROWS - i) - 1] -= result[COLUMNS - j - 1] *
+                                                matrix[offset - 1 - j];
 	}
     }	    
     
     return result; 
 }
 
-
 /**
- * Main function. Calculate matrix from file.
- * Format file:
+ * \brief Gauss elimination.
+ *
+ * Format input file:
  * <Rows> <Columns>
  * <Matrix content>
- * \param arg_1 -- filename.
+ *
+ * Format output file:
+ * <Number>
+ * <Vector of found values>
+ *
+ * \param input is name of input file.
+ * \param output is name of output file.
+ *
+ * \return zero if success.
+ */
+int Gauss(const char *input, const char *output)
+{
+   /*
+    * fp is file descriptor for I/O
+    * ROWS is number of rows in the matrix
+    * COLUMNS is number of columns in the matrix
+    * i is current row number in the matrix
+    * j is current column number in the matrix
+    * matrix is data matrix
+    * result is vector of found values
+    */
+    FILE *fp;
+    int ROWS, COLUMNS, i, j;
+    double *matrix, *result;
+
+    /* Open file for reading data */
+    fp = fopen(input, "rb");
+    
+    fscanf(fp, "%d", &ROWS);
+    fscanf(fp, "%d", &COLUMNS);
+
+    /* Allocate memory for matrix */
+    matrix = (double *) malloc(ROWS * COLUMNS * sizeof (double));
+    /* Reading matrix from the input file */ 
+    for (i = 0; i < ROWS; ++i) {
+	for (j = 0; j < COLUMNS; ++j) {
+	    fscanf(fp, "%lf", &matrix[i * COLUMNS + j]);
+	}
+    }
+    
+    fclose(fp); /* Close file descriptor */
+    
+    /* Forwadr elimination */
+    Gauss_Forward(matrix, ROWS, COLUMNS);
+   
+    /* Backward elimenation */
+    result = Gauss_Backward(matrix, ROWS, COLUMNS);
+
+    /* Open file for writing found values */
+    fp = fopen(output, "wb");
+    /* Writing number of found values */
+    fprintf(fp, "%d\n", ROWS);
+    /* Writing vector of found values */
+    for (i = 0; i < ROWS; ++i) {
+        fprintf(fp, "%lf ", result[i]);
+    }
+    
+    free(result);
+    free(matrix);
+
+    return 0;
+}
+
+
+/**
+ * \brief Main function. Calculate matrix from file.
+ *
+ * \param arg_1 is input filename.
+ * \param arg_2 is output filename.
+ *
+ * \return zero if success.
  */
 int main(int argc, char *argv[])
 {
-    if (argc < 2) return 1;
-    
-    FILE *fp;
-
-    fp = fopen(argv[1], "rb");
-
-    int SIZE_X, SIZE_Y;
-    
-    fscanf(fp, "%d", &SIZE_X);
-    fscanf(fp, "%d", &SIZE_Y);
-    
-    double *matrix;
-
-    matrix = (double *) malloc(SIZE_X * SIZE_Y * sizeof (double));
-    for (int i = 0; i < SIZE_X; ++i) {
-	for (int j = 0; j < SIZE_Y; ++j) {
-	    fscanf(fp, "%lf", &matrix[i * SIZE_Y + j]);
-	}
+    /* Too few arguments */
+    if (argc < 3) {
+        printf("Too few argements!\n");
+        return 1;
     }
-    fclose(fp);
-    print_matrix(matrix, SIZE_X, SIZE_Y);
-    transform_matrix(matrix, SIZE_X, SIZE_Y);
-    print_matrix(matrix, SIZE_X, SIZE_Y);
     
-    double *result;
-    
-    result = calculate_matrix(matrix, SIZE_X, SIZE_Y);
-    print_vector(result, SIZE_Y - 1);
-    
-    free(matrix);
+    if (Gauss(argv[1], argv[2]))
+        printf("failed\n");
+
+    return 0;
 }
