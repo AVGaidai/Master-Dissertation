@@ -8,21 +8,6 @@
 
 #include <mpi.h>
 
-/**
- * \brief Print content of vecrot 'vec'.
- *
- * \param vec is pointer on vecor.
- * \param size is size of vector.
- *
- * \return no value.
- */
-void print_vector(double *vec, int size)
-{
-    printf("Vector:\n");
-    for (int i = 0; i < size; ++i)
-	printf("x%d=%.4lf\n", i, vec[i]);
-}
-
 
 /**
  * \brief Print content of matrix 'matrix'.
@@ -35,9 +20,11 @@ void print_vector(double *vec, int size)
  */
 void print_matrix(double *matrix, int SIZE_X, int SIZE_Y)
 {
+    int i, j;
+
     printf("Matrix:\n");
-    for (int i = 0; i < SIZE_X; ++i) {
-	for (int j = 0; j < SIZE_Y; ++j) {
+    for (i = 0; i < SIZE_X; ++i) {
+	for (j = 0; j < SIZE_Y; ++j) {
 	    printf("%.2lf\t", matrix[i * SIZE_Y + j]);
 	}
 	printf("\n");
@@ -74,7 +61,7 @@ void MPI_Matrix_Partition(FILE *fp, double **part,
 
     *part = NULL;
     cnt = 0;
-    /* Main process */
+    /* Root process */
     if (rank == 0) {
         /* Reading matrix size */
         fscanf(fp, "%d %d", ALLROWS, COLUMNS);
@@ -95,26 +82,26 @@ void MPI_Matrix_Partition(FILE *fp, double **part,
                 memcpy((void *) (*part + cnt * (*COLUMNS)),
                        (void *) row,
                        sizeof(double) * (*COLUMNS));  
-                ++cnt; // Increase counter of the rows
+                ++cnt; /* Increase counter of the rows */
             /* For other rows */
             } else {
                 /* Send the row to receiver */
-                MPI_Send((const void *) row, // Row
-                         *COLUMNS,           // Number of columns in the row
-                         MPI_DOUBLE,         // Elements type
-                         receiver,           // Receiver
-                         receiver,           // Tag
-                         MPI_COMM_WORLD);    // Commutator
+                MPI_Send((const void *) row, /* Row                           */
+                         *COLUMNS,           /* Number of columns in the row  */
+                         MPI_DOUBLE,         /* Elements type                 */
+                         receiver,           /* Receiver                      */
+                         receiver,           /* Tag                           */
+                         MPI_COMM_WORLD);    /* Commutator                    */
             }
         }
         /* Sending message about the end reading to all process */ 
         for (i = 1; i < commsize; ++i) { 
-            MPI_Send((const void *) row, // Any row (dummy)
-                     *COLUMNS,           // Number of columns in the row
-                     MPI_DOUBLE,         // Elements type
-                     i,                  // Receiver
-                     0,                  // Tag
-                     MPI_COMM_WORLD);    // Commutator
+            MPI_Send((const void *) row,     /* Any row (dummy)               */  
+                     *COLUMNS,               /* Number of columns in the row  */
+                     MPI_DOUBLE,             /* Elements type                 */
+                     i,                      /* Receiver                      */
+                     0,                      /* Tag                           */
+                     MPI_COMM_WORLD);        /* Commutator                    */
         }
     }
 
@@ -123,20 +110,20 @@ void MPI_Matrix_Partition(FILE *fp, double **part,
     /* Broadcast message with number of rows in the input matrix */    
     MPI_Bcast((void *) ALLROWS, 1, MPI_INT, 0, MPI_COMM_WORLD);
     
-    /* For other process */
+    /* For other processes */
     if (rank != 0) {
         /* Allocate memory for row */
         row = (double *) malloc(*COLUMNS * sizeof(double));
         /* Waiting for message */
         while (1) {
             /* Receive row of the matrix */
-            MPI_Recv((void *) row,   // Row
-                     *COLUMNS,       // Number of columns in the row
-                     MPI_DOUBLE,     // Elements type
-                     0,              // Sender
-                     MPI_ANY_TAG,    // Tag
-                     MPI_COMM_WORLD, // Commetator
-                     &status);       // Status
+            MPI_Recv((void *) row,   /* Row                           */
+                     *COLUMNS,       /* Number of columns in the row  */
+                     MPI_DOUBLE,     /* Elements type                 */
+                     0,              /* Sender                        */
+                     MPI_ANY_TAG,    /* Tag                           */
+                     MPI_COMM_WORLD, /* Commetator                    */
+                     &status);       /* Status                        */
 
             /* If receive message about the end reading */ 
             if (!status.MPI_TAG) break;
@@ -146,7 +133,7 @@ void MPI_Matrix_Partition(FILE *fp, double **part,
             memcpy((void *) (*part + cnt * (*COLUMNS)),
                    (void *) row,
                    sizeof(double) * (*COLUMNS));  
-            ++cnt; // Increase counter of the rows
+            ++cnt; /* Increase counter of the rows */
         }
     }
     *ROWS = cnt;
@@ -327,13 +314,18 @@ int MPI_Gauss(const char *input, const char *output)
     /* Backward gaussian elimination */
     X = MPI_Gauss_Backward(matrix, ROWS, COLUMNS, ALLROWS);
 
+    /* Root process */
     if (rank == 0) {
+        /* Allocate memory for vector of found values */
         result = (double *) malloc(ALLROWS * sizeof(double));
+        /* Copying in vector found values of node_0 */
         memcpy((void *) result, (void *) X, ROWS * sizeof(double));
-        div = ALLROWS / commsize;
-        mod = ALLROWS % commsize;
-        offset = ROWS;
+        div = ALLROWS / commsize;   /* Integer part from division */
+        mod = ALLROWS % commsize;   /* Modulo */
+        offset = ROWS;              /* Offset in vector */
+        /* Receiving found values of other nodes */
         for (i = 1; i < commsize; ++i) {
+            /* If rows unevenly distributed to nodes */ 
             if (mod) {
                 MPI_Recv((void *) (result + offset),
                          div + 1 % mod,
@@ -343,6 +335,7 @@ int MPI_Gauss(const char *input, const char *output)
                          MPI_STATUS_IGNORE);
                 offset += div + 1 % mod;
                 if (mod > 1) --mod;
+            /* If rows evenly distributed to nodes */
             } else {
                 MPI_Recv((void *) (result + offset),
                          div,
@@ -352,23 +345,29 @@ int MPI_Gauss(const char *input, const char *output)
                          MPI_STATUS_IGNORE);
                 offset += div;
             }
-        }        
+        }
+    /* Other processes */
     } else {
-        MPI_Send((const void *) X,
-                 ROWS,
-                 MPI_DOUBLE,
-                 0, rank,
-                 MPI_COMM_WORLD);
+        /* Sending found values to root process */
+        MPI_Send((const void *) X,   /* Found values of that node */
+                 ROWS,               /* Number of vaund values    */
+                 MPI_DOUBLE,         /* Type of found values      */
+                 0, rank,            /* Sender and message tag    */
+                 MPI_COMM_WORLD);    /* Commutator                */
     }
-    
+
+    /* Root process */
     if (rank == 0) {
         fp = fopen(output, "wb");
-        
+        /* Writing number of found values */
         fprintf(fp, "%d\n", ALLROWS);
+        /* Integer part from division */
         div = ALLROWS / commsize;
+        /* Output found values in correct order */
         for (i = 0; i < ALLROWS; ) {
             mod = ALLROWS % commsize + 1;
-            offset = i / commsize;;
+            /* Offset into vector of all found values */
+            offset = i / commsize;
             for (j = 0; j < commsize && i < ALLROWS; ++j) {
                 fprintf(fp, "%f ", result[offset]);
                 offset += div + 1 % mod;
@@ -410,4 +409,6 @@ int main(int argc, char *argv[])
     MPI_Gauss(argv[1], argv[2]);
 
     MPI_Finalize();
+
+    return 0;
 }
