@@ -13,6 +13,8 @@
  *
  * \param vec is pointer on vecor.
  * \param size is size of vector.
+ *
+ * \return no value.
  */
 void print_vector(double *vec, int size)
 {
@@ -28,6 +30,8 @@ void print_vector(double *vec, int size)
  * \param matrix is pointer on matrix.
  * \param SIZE_X is number of rows in the matrix.
  * \param SIZE_Y is number of columns in the matrix.
+ *
+ * \return no value.
  */
 void print_matrix(double *matrix, int SIZE_X, int SIZE_Y)
 {
@@ -48,6 +52,8 @@ void print_matrix(double *matrix, int SIZE_X, int SIZE_Y)
  * \param ROWS is pointer to the number of rows in the output part.
  * \param COLUMNS is pointer to the number of columns in the output part.
  * \param ALLROWS is pointer to the number of rows in the input matrix.
+ *
+ * \return no value.
  */
 void MPI_Matrix_Partition(FILE *fp, double **part,
                           int *ROWS, int *COLUMNS, int *ALLROWS)
@@ -155,6 +161,8 @@ void MPI_Matrix_Partition(FILE *fp, double **part,
  * \param ROWS is number of rows in the matrix part.
  * \param COLUMNS is number of columns in the matrix part.
  * \param ALLROWS is number of rows in the input matrix.
+ *
+ * \return no value.
  */
 void MPI_Gauss_Forward(double *part, int ROWS, int COLUMNS, int ALLROWS)
 {
@@ -234,7 +242,7 @@ double *MPI_Gauss_Backward(double *part, int ROWS, int COLUMNS, int ALLROWS)
     int i, j, k, l, m;
     double *X;
     double tmp;
-        
+    
     MPI_Comm_size(MPI_COMM_WORLD, &commsize);    
     MPI_Comm_rank(MPI_COMM_WORLD, &rank);
 
@@ -273,60 +281,133 @@ double *MPI_Gauss_Backward(double *part, int ROWS, int COLUMNS, int ALLROWS)
 }
 
 
-
 /**
- * \brief Main function. Calculate matrix from file.
+ * \brief Gaussian elimination.
  *
- * Format file:
+ * Format input file:
  * <Rows> <Columns>
  * <Matrix content>
  *
- * \param arg_1 is filename.
+ * Format output file:
+ * <Number>
+ * <Vector of found values>
+ *
+ * \param input is input filename.
+ * \param output is output filename.
+ *
+ * \return zero if success.
  */
-int main(int argc, char *argv[])
+int MPI_Gauss(const char *input, const char *output)
 {
-    int commsize, rank, ROWS, COLUMNS, ALLROWS, i;
-    double *X, *matrix = NULL; 
+    int commsize, rank, ROWS, COLUMNS, ALLROWS;
+    int i, j, mod, div, offset;
+    double *X, *result, *matrix = NULL; 
     FILE *fp;
-    
-    if (argc < 2) return 1;
-            
-    MPI_Init(&argc, &argv);
+        
     MPI_Comm_size(MPI_COMM_WORLD, &commsize);
     MPI_Comm_rank(MPI_COMM_WORLD, &rank);
-
-    if (rank == 0)
-        fp = fopen(argv[1], "r");
     
+    /* Open input file by main process */
+    if (rank == 0) {
+        fp = fopen(input, "r");
+    }
+    
+    /* Matrix partitioning on the part for nodes */
     MPI_Matrix_Partition(fp, &matrix, &ROWS, &COLUMNS, &ALLROWS);
 
+    /* Close input file by main process */
     if (rank == 0)
         fclose(fp);
 
-    /* sleep(rank); */
-    /* if (rank == 0) print_matrix(matrix, ROWS, COLUMNS); */
-
-    /* sleep(5); */
-    
+    /* Forward gaussian elimination */
     MPI_Gauss_Forward(matrix, ROWS, COLUMNS, ALLROWS);
 
-    /* sleep(rank); */
-    /* print_matrix(matrix, ROWS, COLUMNS); */
-
+    /* Allocate memory for vector of found values */
     X = (double *) malloc(ROWS * sizeof(double));
+    /* Backward gaussian elimination */
     X = MPI_Gauss_Backward(matrix, ROWS, COLUMNS, ALLROWS);
 
-    /* sleep(rank); */
-
-    for (i = 0; i < ROWS; ++i) {
-        printf("X%d = %lf\n", rank, X[i]);
-        rank += commsize;
+    if (rank == 0) {
+        result = (double *) malloc(ALLROWS * sizeof(double));
+        memcpy((void *) result, (void *) X, ROWS * sizeof(double));
+        div = ALLROWS / commsize;
+        mod = ALLROWS % commsize;
+        offset = ROWS;
+        for (i = 1; i < commsize; ++i) {
+            if (mod) {
+                MPI_Recv((void *) (result + offset),
+                         div + 1 % mod,
+                         MPI_DOUBLE,
+                         i, i,
+                         MPI_COMM_WORLD,
+                         MPI_STATUS_IGNORE);
+                offset += div + 1 % mod;
+                if (mod > 1) --mod;
+            } else {
+                MPI_Recv((void *) (result + offset),
+                         div,
+                         MPI_DOUBLE,
+                         i, i,
+                         MPI_COMM_WORLD,
+                         MPI_STATUS_IGNORE);
+                offset += div;
+            }
+        }        
+    } else {
+        MPI_Send((const void *) X,
+                 ROWS,
+                 MPI_DOUBLE,
+                 0, rank,
+                 MPI_COMM_WORLD);
     }
     
+    if (rank == 0) {
+        fp = fopen(output, "wb");
+        
+        fprintf(fp, "%d\n", ALLROWS);
+        div = ALLROWS / commsize;
+        for (i = 0; i < ALLROWS; ) {
+            mod = ALLROWS % commsize + 1;
+            offset = i / commsize;;
+            for (j = 0; j < commsize && i < ALLROWS; ++j) {
+                fprintf(fp, "%f ", result[offset]);
+                offset += div + 1 % mod;
+                if (mod > 1) --mod;
+                ++i;
+            }
+        }
+
+        fclose(fp);
+        free(result);
+    }
+    
+    /* If node was used */
     if (ROWS) {
         free(X);
         free(matrix);
     }
     
+    return 0;
+}
+
+/**
+ * \brief Main function. Calculate matrix from file.
+ *
+ * \param arg_1 is input filename.
+ * \param arg_2 is output filename.
+ *
+ * \return zero if success.
+ */
+int main(int argc, char *argv[])
+{    
+    if (argc < 3) {
+        printf("Too few arguments!\n");
+        return 1;
+    }
+    
+    MPI_Init(&argc, &argv);
+    
+    MPI_Gauss(argv[1], argv[2]);
+
     MPI_Finalize();
 }
