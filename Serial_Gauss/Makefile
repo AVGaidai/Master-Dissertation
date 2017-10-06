@@ -1,7 +1,7 @@
 P=main.out
 OBJECTS=main.c
 CC=gcc
-CFLAGS=-Wall -g
+CFLAGS=-Wall -g -pedantic -ansi
 
 all:
 	$(CC) $(CFLAGS) -o $(P) $(OBJECTS)
