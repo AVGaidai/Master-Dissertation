@@ -29,7 +29,7 @@ void print_matrix(double *matrix, int ROWS, int COLUMNS)
     for (i = 0; i < ROWS; ++i) {
         offset = i * COLUMNS;
 	for (j = 0; j < COLUMNS; ++j) {
-	    printf("%.2lf\t", matrix[offset + j]);
+	    printf("%.2f\t", matrix[offset + j]);
 	}
 	printf("\n");
     }
@@ -180,7 +180,7 @@ int Gauss(const char *input, const char *output)
     fprintf(fp, "%d\n", ROWS);
     /* Writing vector of found values */
     for (i = 0; i < ROWS; ++i) {
-        fprintf(fp, "%lf ", result[i]);
+        fprintf(fp, "%f ", result[i]);
     }
     
     free(result);
