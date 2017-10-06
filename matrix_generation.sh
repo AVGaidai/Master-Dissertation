@@ -1,28 +1,28 @@
 #!/bin/bash
 
+if [[ $# -lt 2 ]] ;
+then
+    exit
+fi
+
 if [[ $1 ]] ;
 then
-    NAME=$1
+    let ROWS=$1
+fi
+
+if [[ $2 ]] ;
+then
+    let COLS=$2
+fi
+
+if [[ $3 ]] ;
+then
+    NAME=$3
 else
     NAME="data.txt"
 fi
 
 echo "" > $NAME
-
-if [[ $2 ]] ;
-then
-    let ROWS=$2
-else
-    let ROWS=3
-fi
-
-if [[ $3 ]] ;
-then
-    let COLS=$3
-else
-    let COLS=4
-fi
-
 
 string=$ROWS" "$COLS
 echo $string > $NAME
