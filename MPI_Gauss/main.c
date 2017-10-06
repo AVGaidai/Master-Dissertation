@@ -1,10 +1,10 @@
 /** \file */
 #include <stdio.h>
-#include <stdlib.h>
+#include <stdlib.h>   /* malloc() */
 
-#include <unistd.h>   // sleep
+#include <unistd.h>   /* sleep()  */
 
-#include <string.h>
+#include <string.h>   /* memcpy() */
 
 #include <mpi.h>
 
@@ -25,7 +25,7 @@ void print_matrix(double *matrix, int SIZE_X, int SIZE_Y)
     printf("Matrix:\n");
     for (i = 0; i < SIZE_X; ++i) {
 	for (j = 0; j < SIZE_Y; ++j) {
-	    printf("%.2lf\t", matrix[i * SIZE_Y + j]);
+	    printf("%.2f\t", matrix[i * SIZE_Y + j]);
 	}
 	printf("\n");
     }
