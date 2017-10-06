@@ -1,4 +1,8 @@
 /** \file */
+/*
+ * GAUSS ELIMINATION (MPI VERSION) BY ANATOLY GAIDAI
+ * 2017
+ */
 #include <stdio.h>
 #include <stdlib.h>   /* malloc() */
 
