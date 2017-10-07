@@ -35,7 +35,7 @@ done
 
 if [[ ${ARR1[0]} -ne ${ARR2[0]} ]] ;
 then
-    echo "Vectors is not equal! (Accuracy: $EPS)"
+    echo "Vectors are not equal! (Accuracy: $EPS)"
     exit 2
 fi
 
@@ -55,12 +55,12 @@ do
     cmp=`echo "$dif > $EPS" | bc -l`
     if [[ $cmp -eq 1 ]] ;
     then
-        echo "Vectors is not equal! (Accuracy: $EPS)"
+        echo "Vectors are not equal! (Accuracy: $EPS)"
         exit 2
     fi
 
     let i=$i+1
 done
 
-echo "Vectors is equal! (Accuracy: $EPS)"
+echo "Vectors are equal! (Accuracy: $EPS)"
 
