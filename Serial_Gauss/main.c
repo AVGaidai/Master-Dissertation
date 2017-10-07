@@ -6,6 +6,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 
+#include <sys/time.h>  /* gettimeofday() */
 
 /**
  * \brief Print content of matrix 'matrix'.
@@ -200,14 +201,29 @@ int Gauss(const char *input, const char *output)
  */
 int main(int argc, char *argv[])
 {
+    struct timeval start, end;
+    
     /* Too few arguments */
     if (argc < 3) {
         printf("Too few argements!\n");
         return 1;
     }
+    /* Start timer */
+    gettimeofday(&start, NULL);
     
     if (Gauss(argv[1], argv[2]))
         printf("failed\n");
 
+    /* Stop timer */
+    gettimeofday(&end, NULL);
+
+    /* Human readable format */
+    end.tv_sec -= start.tv_sec;
+    end.tv_usec += end.tv_sec * 1000000;
+    end.tv_usec -= start.tv_usec;
+    end.tv_sec = end.tv_usec / 1000000;
+    end.tv_usec -= end.tv_sec * 1000000;
+    printf("time: %ld.%ld sec.\n", end.tv_sec, end.tv_usec);
+    
     return 0;
 }

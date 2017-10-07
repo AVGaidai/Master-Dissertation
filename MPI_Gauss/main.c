@@ -10,6 +10,8 @@
 
 #include <string.h>   /* memcpy() */
 
+#include <sys/time.h> /* gettimeofday () */
+
 #include <mpi.h>
 
 
@@ -393,6 +395,8 @@ int MPI_Gauss(const char *input, const char *output)
     return 0;
 }
 
+
+
 /**
  * \brief Main function. Calculate matrix from file.
  *
@@ -403,15 +407,39 @@ int MPI_Gauss(const char *input, const char *output)
  */
 int main(int argc, char *argv[])
 {    
+    int rank;
+    struct timeval start, end;
+    
     if (argc < 3) {
         printf("Too few arguments!\n");
         return 1;
     }
     
     MPI_Init(&argc, &argv);
+    MPI_Comm_rank(MPI_COMM_WORLD, &rank);
+
+    /* Root process */
+    if (rank == 0) {
+        /* Start timer */
+        gettimeofday(&start, NULL);
+    }
     
     MPI_Gauss(argv[1], argv[2]);
 
+    /* Root process */
+    if (rank == 0) {
+        /* Stop timer */
+        gettimeofday(&end, NULL);
+        
+        /* Human readable format */
+        end.tv_sec -= start.tv_sec;
+        end.tv_usec += end.tv_sec * 1000000;
+        end.tv_usec -= start.tv_usec;
+        end.tv_sec = end.tv_usec / 1000000;
+        end.tv_usec -= end.tv_sec * 1000000;
+        printf("time: %ld.%ld sec.\n", end.tv_sec, end.tv_usec);
+    }
+    
     MPI_Finalize();
 
     return 0;
