@@ -84,8 +84,8 @@ Functions</h2></td></tr>
 </div><div class="memdoc">
 
 <p>Gauss elimination. </p>
-<p>Format input file: &lt;Rows&gt; &lt;Columns&gt; &lt;Matrix content&gt;=""&gt;</p>
-<p>Format output file: &lt;Number&gt; &lt;Vector of="" found="" values&gt;=""&gt;</p>
+<p>Format input file: <br> &lt;Rows&gt; &lt;Columns&gt; <br> &lt;Matrix content&gt;</p>
+<p>Format output file:<br> &lt;Number&gt; &lt;Vector of found values&gt;</p>
 <dl class="params"><dt>Parameters</dt><dd>
   <table class="params">
     <tr><td class="paramname">input</td><td>is name of input file. </td></tr>
