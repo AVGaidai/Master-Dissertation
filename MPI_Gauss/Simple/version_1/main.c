@@ -64,13 +64,21 @@ void MPI_Matrix_Partition(FILE *fp, double **part,
         
     MPI_Comm_size(MPI_COMM_WORLD, &commsize);
     MPI_Comm_rank(MPI_COMM_WORLD, &rank);
-
+    
     *part = NULL;
     cnt = 0;
     /* Root process */
     if (rank == 0) {
         /* Reading matrix size */
         fscanf(fp, "%d %d", ALLROWS, COLUMNS);
+    }
+
+    /* Broadcast message with number of columns */
+    MPI_Bcast((void *) COLUMNS, 1, MPI_INT, 0, MPI_COMM_WORLD);
+    /* Broadcast message with number of rows in the input matrix */    
+    MPI_Bcast((void *) ALLROWS, 1, MPI_INT, 0, MPI_COMM_WORLD);
+
+    if (rank == 0) {
         /* Allocate memory for row */
         row = (double *) malloc(*COLUMNS * sizeof(double));
         /* Alternate reading matrix rows */
@@ -109,15 +117,8 @@ void MPI_Matrix_Partition(FILE *fp, double **part,
                      0,                      /* Tag                           */
                      MPI_COMM_WORLD);        /* Commutator                    */
         }
-    }
-
-    /* Broadcast message with number of columns */
-    MPI_Bcast((void *) COLUMNS, 1, MPI_INT, 0, MPI_COMM_WORLD);
-    /* Broadcast message with number of rows in the input matrix */    
-    MPI_Bcast((void *) ALLROWS, 1, MPI_INT, 0, MPI_COMM_WORLD);
-    
-    /* For other processes */
-    if (rank != 0) {
+    } else {    
+        /* For other processes */
         /* Allocate memory for row */
         row = (double *) malloc(*COLUMNS * sizeof(double));
         /* Waiting for message */
@@ -314,7 +315,7 @@ int MPI_Gauss(const char *input, const char *output)
 
     /* Forward gaussian elimination */
     MPI_Gauss_Forward(matrix, ROWS, COLUMNS, ALLROWS);
-
+    
     /* Allocate memory for vector of found values */
     X = (double *) malloc(ROWS * sizeof(double));
     /* Backward gaussian elimination */
