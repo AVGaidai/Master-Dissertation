@@ -16,6 +16,8 @@
 
 #include <time.h>
 
+#include <math.h>
+
 #include <mpi.h>
 #include <mpi-ext.h>
 
@@ -23,7 +25,11 @@
 MPI_Comm COMM, NEWCOMM;
 MPI_Errhandler new_eh;
 
+struct timeval start, end;
+
 int mpi_mcw_rank, mpi_mcw_size;
+int flg = 0;
+
 
 /**
  * \brief Print content of matrix 'matrix'.
@@ -92,6 +98,16 @@ void MPI_Matrix_Partition(FILE *fp, double **matrix,
 }
 
 
+void Failure_gen(double chance)
+{
+    if (rand() / (double) RAND_MAX <= chance) {
+        printf("p: %d\n", mpi_mcw_rank);
+        raise(SIGKILL);
+    }
+}
+
+
+
 /**
  * \brief Matrix transformation to lower-triangular.
  *
@@ -132,17 +148,20 @@ void MPI_Gauss_Forward(double *matrix, int ROWS, int COLUMNS)
             }
             matrix[(l + i) * COLUMNS + curr_row] = 0.00;
         }
+        /* sleep(mpi_mcw_rank); */
+        /* printf("p%d\n", mpi_mcw_rank); */
+        /* print_matrix(matrix, ROWS, COLUMNS); */
 
-        if (rand() % 1000 == 0 && mpi_mcw_rank == (rand() % mpi_mcw_size)) {
-            printf("p: %d\n", mpi_mcw_rank);
-            raise(SIGKILL);
-        }
-        printf("message 1\n");
+        if (mpi_mcw_rank == 0 && mpi_mcw_size > 1)
+            Failure_gen(0.005);
+
+        MPI_Barrier(COMM);
+        /* printf("message 1\n"); */
         i = mpi_mcw_size;
         MPI_Comm_size(COMM, &mpi_mcw_size);
         if (mpi_mcw_size < i) {
-            printf("message 2\n");
             --curr_row;
+            MPI_Comm_rank(COMM, &mpi_mcw_rank);
             continue;
         }
         block_size = proc_rows / mpi_mcw_size;
@@ -240,7 +259,6 @@ int MPI_Gauss(const char *input, const char *output)
 }
 
 
-
 char * get_str_failed_procs(MPI_Comm comm, MPI_Group f_group)
 {
     int f_size, i, c_size;
@@ -309,6 +327,7 @@ void mpi_error_handler(MPI_Comm *comm, int *error_code, ...)
     MPI_Comm_size(*comm, &loc_size);
 
     if( *error_code == MPI_ERR_PROC_FAILED ) {
+        printf("Process %d\n", mpi_mcw_rank);
         /* Access the local list of failures */
         MPIX_Comm_failure_ack(*comm);
         MPIX_Comm_failure_get_acked(*comm, &f_group);
@@ -322,27 +341,22 @@ void mpi_error_handler(MPI_Comm *comm, int *error_code, ...)
                mpi_mcw_rank, mpi_mcw_size,
                (mpi_mcw_size == loc_size ? "MCW" : "Subcomm"),
                num_failures, ranks_failed);
-
         free(ranks_failed);
-    } 
 
+        MPIX_Comm_agree(COMM, &loc_size);
+        MPIX_Comm_revoke(COMM);
+        MPIX_Comm_shrink(COMM, &NEWCOMM);
+        MPI_Comm_free(&COMM);
+        COMM = NEWCOMM;
+        MPI_Comm_set_errhandler(COMM, new_eh);
+        
+    } else {
+        return;
+    }
+    
     /* Introduce a small delay to aid debugging */
     fflush(NULL);
-    sleep(1);
-
     
-    /* MPIX_Comm_revoke(COMM); */
-    /* MPIX_Comm_shrink(COMM, &NEWCOMM); */
-    
-    /* COMM = NEWCOMM; */
-    /* MPI_Comm_set_errhandler(COMM, new_eh); */
-    
-    /* fflush(NULL); */
-    /* sleep(1); */
-
-    /* MPI_Comm_size(*comm, &loc_size); */
-    /* printf("stalo %d\n", loc_size); */
-
     return;
 }
 
@@ -357,8 +371,6 @@ void mpi_error_handler(MPI_Comm *comm, int *error_code, ...)
  */
 int main(int argc, char *argv[])
 {    
-    struct timeval start, end;
-    
     if (argc < 3) {
         printf("Too few arguments!\n");
         return 1;
@@ -392,7 +404,6 @@ int main(int argc, char *argv[])
         end.tv_usec -= end.tv_sec * 1000000;
         printf("time: %ld.%ld sec.\n", end.tv_sec, end.tv_usec);
     }
-    
     
     MPI_Finalize();
 
