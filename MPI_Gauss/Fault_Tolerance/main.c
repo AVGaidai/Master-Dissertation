@@ -101,7 +101,7 @@ void MPI_Matrix_Partition(FILE *fp, double **matrix,
 void Failure_gen(double chance)
 {
     if (rand() / (double) RAND_MAX <= chance) {
-        printf("p: %d\n", mpi_mcw_rank);
+        printf("N %d\n", mpi_mcw_size - 1);
         raise(SIGKILL);
     }
 }
@@ -152,7 +152,7 @@ void MPI_Gauss_Forward(double *matrix, int ROWS, int COLUMNS)
         /* printf("p%d\n", mpi_mcw_rank); */
         /* print_matrix(matrix, ROWS, COLUMNS); */
 
-        if (mpi_mcw_rank == 0 && mpi_mcw_size > 1)
+        if (mpi_mcw_rank == 0)
             Failure_gen(0.005);
 
         MPI_Barrier(COMM);
@@ -196,6 +196,7 @@ double *MPI_Gauss_Backward(double *matrix, int ROWS, int COLUMNS)
     results = (double *) calloc((size_t) ROWS, ROWS * sizeof(double));
 
     for (i = ROWS - 1; i >= 0; --i) {
+        Failure_gen(0.005);        
         for (j = 1; j < ROWS - i; ++j) {
             results[i] -= matrix[(i + 1) * COLUMNS - j - 1] *
                 results[COLUMNS - j - 1];
