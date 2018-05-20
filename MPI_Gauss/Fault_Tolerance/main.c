@@ -125,7 +125,6 @@ void mpi_error_handler(MPI_Comm *comm, int *error_code, ...)
         COMM = NEWCOMM;
         MPI_Comm_set_errhandler(COMM, new_eh);
 
-        MPI_Comm_size(COMM, &mpi_mcw_size);
         MPI_Comm_rank(COMM, &mpi_mcw_rank);
     } else {
         return;
@@ -274,7 +273,7 @@ void MPI_Gauss_Forward(double *matrix, int ROWS, int COLUMNS)
                 raise(SIGKILL);
             }
         }
-
+        
         MPI_Barrier(COMM);
         /* printf("message 1\n"); */
         i = mpi_mcw_size;
@@ -319,7 +318,7 @@ double *MPI_Gauss_Backward(double *matrix, int ROWS, int COLUMNS)
         if (mpi_mcw_rank == 0) {
             if (Failure_gen(CHANCE)) {
                 printf("(Backward) N %d \t STEP %d\n",
-                       mpi_mcw_size - 1, i); 
+                       mpi_mcw_size - 1, i);
                 raise(SIGKILL);
             }
         }
